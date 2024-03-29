@@ -1,10 +1,10 @@
 pub mod error;
 pub mod parse_node;
 
-mod tokenizer;
 mod declaration;
 mod operator;
-mod primary;
 mod parser;
+mod primary;
+mod tokenizer;
 
 pub use parser::Parser;

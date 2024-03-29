@@ -10,11 +10,12 @@ impl<'a> Parser<'a> {
     pub(super) fn ident_or_keyword(&mut self) -> ParseOption<IdentKeyword> {
         self.skip();
 
-        let mut range = if let Some((i, c)) = self.iter.next_if(|(_, c)| c.is_alphabetic() || *c == '_') {
-            i..i + c.len_utf8()
-        } else {
-            return None;
-        };
+        let mut range =
+            if let Some((i, c)) = self.iter.next_if(|(_, c)| c.is_alphabetic() || *c == '_') {
+                i..i + c.len_utf8()
+            } else {
+                return None;
+            };
 
         while let Some((i, c)) = self.iter.next_if(|(_, c)| c.is_alphanumeric() || *c == '_') {
             range.end = i + c.len_utf8();
@@ -39,14 +40,17 @@ impl<'a> Parser<'a> {
         self.iter = old;
         None
     }
-    pub(super) fn ident_if(&mut self, predicate: impl FnOnce(StringName) -> bool) -> ParseOption<StringName> {
+    pub(super) fn ident_if(
+        &mut self,
+        predicate: impl FnOnce(StringName) -> bool,
+    ) -> ParseOption<StringName> {
         let old = self.iter.clone();
-        
+
         let ident = self.ident()?;
         if predicate(ident.data) {
             return Some(ident);
         }
-        
+
         self.iter = old;
         None
     }
@@ -55,7 +59,7 @@ impl<'a> Parser<'a> {
     }
     pub(super) fn keyword(&mut self) -> ParseOption<Keyword> {
         let old = self.iter.clone();
-        
+
         let keyword = self.ident_or_keyword()?;
 
         if let IdentKeyword::Keyword(k) = keyword.data {
@@ -68,7 +72,10 @@ impl<'a> Parser<'a> {
     pub(super) fn keyword_eq(&mut self, keyword: Keyword) -> ParseOption<Keyword> {
         self.keyword_if(|k| k == keyword)
     }
-    pub(super) fn keyword_if(&mut self, predicate: impl FnOnce(Keyword) -> bool) -> ParseOption<Keyword> {
+    pub(super) fn keyword_if(
+        &mut self,
+        predicate: impl FnOnce(Keyword) -> bool,
+    ) -> ParseOption<Keyword> {
         let old = self.iter.clone();
 
         let keyword = self.keyword()?;
@@ -94,7 +101,7 @@ impl<'a> Parser<'a> {
                 range.end = i + c.len_utf8();
 
                 let symbol_str = &self.source[range.clone()];
-                
+
                 if let Some(s) = STR_TO_SYMBOL.get(symbol_str) {
                     symbol = Some(*s);
                     last = self.iter.clone();
@@ -107,7 +114,10 @@ impl<'a> Parser<'a> {
         self.iter = last;
         symbol.map(|s| ParseNode::new(range, s))
     }
-    pub(super) fn symbol_if(&mut self, predicate: impl FnOnce(Symbol) -> bool) -> ParseOption<Symbol> {
+    pub(super) fn symbol_if(
+        &mut self,
+        predicate: impl FnOnce(Symbol) -> bool,
+    ) -> ParseOption<Symbol> {
         let old = self.iter.clone();
 
         let symbol = self.symbol()?;
@@ -133,7 +143,7 @@ impl<'a> Parser<'a> {
             if self.iter.next_if(is_slash).is_some() {
                 if self.iter.next_if(is_slash).is_some() {
                     for (_, c) in self.iter.by_ref() {
-                        if c == '\n' || c == '\r' {
+                        if c == '\n' {
                             break;
                         }
                     }
@@ -346,7 +356,8 @@ impl<'a> Parser<'a> {
             },
             is_raw,
             ErrorType::IncompleteString,
-        ).map(Some)
+        )
+        .map(Some)
     }
     pub(super) fn number(&mut self) -> ParseResultOption<Number> {
         self.skip();

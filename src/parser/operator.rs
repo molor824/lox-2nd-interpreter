@@ -1,6 +1,6 @@
-use super::parser::*;
-use super::parse_node::*;
 use super::error::*;
+use super::parse_node::*;
+use super::parser::*;
 
 // purely for operators precedence parsing
 
@@ -9,7 +9,10 @@ impl<'a> Parser<'a> {
         self.multiplication()
     }
     pub(super) fn multiplication(&mut self) -> ParseResultOption<AnyNode> {
-        self.binary(|p| p.addition(), |s| matches!(s, Symbol::Mul | Symbol::Div | Symbol::Mod))
+        self.binary(
+            |p| p.addition(),
+            |s| matches!(s, Symbol::Mul | Symbol::Div | Symbol::Mod),
+        )
     }
     pub(super) fn addition(&mut self) -> ParseResultOption<AnyNode> {
         self.binary(|p| p.unary(), |s| matches!(s, Symbol::Add | Symbol::Sub))
@@ -17,7 +20,8 @@ impl<'a> Parser<'a> {
     pub(super) fn unary(&mut self) -> ParseResultOption<AnyNode> {
         let mut symbols = vec![];
 
-        while let Some(s) = self.symbol_if(|s| matches!(s, Symbol::Not | Symbol::Add | Symbol::Sub)) {
+        while let Some(s) = self.symbol_if(|s| matches!(s, Symbol::Not | Symbol::Add | Symbol::Sub))
+        {
             symbols.push(s);
         }
 
@@ -83,7 +87,12 @@ impl<'a> Parser<'a> {
             return Ok(None);
         };
 
-        while let Some(symbol) = self.symbol_if(|s| matches!(s, Symbol::Dot | Symbol::LSquareBracket | Symbol::LParenthesis)) {
+        while let Some(symbol) = self.symbol_if(|s| {
+            matches!(
+                s,
+                Symbol::Dot | Symbol::LSquareBracket | Symbol::LParenthesis
+            )
+        }) {
             let range;
             let suffix;
             match symbol.data {

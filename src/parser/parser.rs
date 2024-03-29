@@ -1,4 +1,6 @@
-use std::{iter::Peekable, str::CharIndices};
+use std::iter::Peekable;
+
+use crate::source::SourceIter;
 
 use super::{error::*, parse_node::*};
 
@@ -9,14 +11,14 @@ pub type ParseOption<T> = Option<ParseNode<T>>;
 #[derive(Debug, Clone)]
 pub struct Parser<'a> {
     pub(super) source: &'a str,
-    pub(super) iter: Peekable<CharIndices<'a>>,
+    pub(super) iter: Peekable<SourceIter<'a>>,
 }
 // contains mostly miscallenous methods that are often used across multiple stages of parsing
 // such as symbols, identifiers, types etc.
 impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
-            iter: source.char_indices().peekable(),
+            iter: SourceIter::from(source).peekable(),
             source,
         }
     }

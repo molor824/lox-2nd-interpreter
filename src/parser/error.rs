@@ -2,6 +2,8 @@ use std::fmt;
 use std::fmt::Write;
 use std::ops::Range;
 
+use crate::source::SourceIter;
+
 #[derive(Debug, Clone)]
 pub struct SyntaxError {
     pub range: Range<usize>,
@@ -17,83 +19,92 @@ impl fmt::Display for SyntaxError {
         write!(f, "{}", self.error)
     }
 }
+
+fn highlight_line(
+    source: &str,
+    line_range: Range<usize>,
+    error_range: Range<usize>,
+    line_number: usize,
+    message: &mut impl Write,
+) -> fmt::Result {
+    // checking for collision, if there isn't then there's no need to do anything
+    if usize::max(error_range.start, line_range.start)
+        >= usize::min(error_range.end, line_range.end)
+    {
+        return Ok(());
+    }
+
+    let line_number_string = format!(" {:3} | ", line_number + 1);
+    writeln!(
+        message,
+        "{}{}",
+        line_number_string,
+        &source[line_range.clone()]
+    )?;
+
+    // print spaces to compensate for the line number string
+    for _ in 0..line_number_string.len() {
+        write!(message, " ")?;
+    }
+
+    // print spaces until it reaches the highlight
+    let highlight_start = usize::max(line_range.start, error_range.start);
+    for _ in line_range.start..highlight_start {
+        write!(message, " ")?;
+    }
+
+    // print '^' until it reaches error range end or line range end
+    for _ in highlight_start..(usize::min(line_range.end, error_range.end)) {
+        write!(message, "^")?;
+    }
+
+    // finally newline
+    writeln!(message)
+}
 impl DisplayError for SyntaxError {
     fn display(&self, source: &str, message: &mut impl Write) -> fmt::Result {
-        let (start, end) = cursor_locations(self.range.clone(), source).unwrap();
-        let mut lines = source.lines().skip(start.0);
+        let mut iter = SourceIter::from(source);
+        let mut column = 0;
+        let mut line = 0;
+        let mut line_start = 0;
+        let mut line_end = 0; // index past the last iterated character (for the last line ending without newline)
 
-        write!(
-            message,
-            "Error at line: {}, column: {}\n{}\n\n",
-            start.0 + 1,
-            start.1,
-            self
-        )?;
+        for (i, ch) in iter.by_ref() {
+            line_end = i + ch.len_utf8();
 
-        for i in start.0..=end.0 {
-            let line = if let Some(s) = lines.next() {
-                s
+            if ch == '\n' {
+                // reached end of line, highlight the line
+                highlight_line(source, line_start..i, self.range.clone(), line, message)?;
+
+                // update line, column and line_start
+                line += 1;
+                column = 0;
+                line_start = i + 1; // '\n' will always have length 1
             } else {
-                continue;
-            };
-            let line_num = format!("{:>3} | ", i + 1);
-
-            writeln!(message, "{}{}", line_num, line)?;
-
-            for _ in 0..line_num.len() {
-                write!(message, " ")?;
+                column += 1;
             }
-
-            let mut offset = 0;
-            let mut end_offset = line.len();
-
-            if i == start.0 {
-                offset = start.1;
-            }
-            if i == end.0 {
-                end_offset = end.1 + 1;
-            }
-            for i in 0..line.len() {
+            // check if it just reached the range
+            if i == self.range.start {
+                // print the error location
                 write!(
                     message,
-                    "{}",
-                    if i < offset || i > end_offset {
-                        ' '
-                    } else {
-                        '^'
-                    }
+                    "Error at line: {}, column: {}\n{}\n",
+                    line + 1,
+                    column,
+                    self.error
                 )?;
             }
-
-            if i != end.0 {
-                writeln!(message)?;
-            }
         }
 
-        Ok(())
+        // this is the last line, highlight it if range exists
+        highlight_line(
+            source,
+            line_start..line_end,
+            self.range.clone(),
+            line,
+            message,
+        )
     }
-}
-fn cursor_locations(range: Range<usize>, text: &str) -> Option<((usize, usize), (usize, usize))> {
-    let mut start = (0, 0);
-
-    for c in text.get(..range.start)?.chars() {
-        start.1 += 1;
-        if c == '\n' {
-            start.0 += 1;
-            start.1 = 0;
-        }
-    }
-
-    let mut end = start;
-    for c in text.get(range)?.chars() {
-        end.1 += 1;
-        if c == '\n' {
-            end.0 += 1;
-            end.1 = 0;
-        }
-    }
-
-    Some((start, end))
 }
 
 #[derive(Debug, Clone)]
@@ -152,7 +163,7 @@ impl fmt::Display for ErrorType {
             ),
             ErrorType::ExpectedExpr => write!(f, "Expected expression"),
             ErrorType::TrailingComma => write!(f, "Trailing comma"),
-            ErrorType::ExpectedVarName => write!(f, "Expected variable name or tuple and struct deconstructing"),
+            ErrorType::ExpectedVarName => write!(f, "Expected variable name"),
         }
     }
 }

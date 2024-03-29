@@ -4,6 +4,7 @@ use parser::error::*;
 use parser::*;
 
 mod parser;
+mod source;
 mod string_name;
 
 fn main() {

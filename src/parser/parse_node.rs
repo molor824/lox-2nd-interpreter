@@ -1,5 +1,5 @@
-use std::{fmt, ops::Range, collections::HashMap};
 use once_cell::sync::Lazy;
+use std::{collections::HashMap, fmt, ops::Range};
 
 use crate::string_name::*;
 
@@ -62,7 +62,7 @@ pub enum AnyNode {
     },
     Grouping(Box<ParseNode<AnyNode>>),
     VarDecl {
-        name: Box<ParseNode<VarName>>,
+        name: StringName,
         value: Option<Box<ParseNode<AnyNode>>>,
     },
 }
@@ -85,12 +85,18 @@ impl From<Binary> for AnyNode {
 }
 impl From<Unary> for AnyNode {
     fn from(value: Unary) -> Self {
-        Self::Unary { operand: Box::new(value.operand), operator: value.operator }
+        Self::Unary {
+            operand: Box::new(value.operand),
+            operator: value.operator,
+        }
     }
 }
 impl From<VarDecl> for AnyNode {
     fn from(value: VarDecl) -> Self {
-        Self::VarDecl { name: Box::new(value.name), value: value.value.map(Box::new) }
+        Self::VarDecl {
+            name: value.name,
+            value: value.value.map(Box::new),
+        }
     }
 }
 impl From<Number> for AnyNode {
@@ -103,13 +109,8 @@ impl From<Number> for AnyNode {
 }
 #[derive(Debug, Clone)]
 pub struct VarDecl {
-    pub name: ParseNode<VarName>,
+    pub name: StringName,
     pub value: Option<ParseNode<AnyNode>>,
-}
-#[derive(Debug, Clone)]
-pub enum VarName {
-    Name(StringName),
-    Tuple(Vec<ParseNode<StringName>>),
 }
 #[derive(Debug, Clone)]
 pub enum SuffixType {
@@ -148,14 +149,19 @@ pub enum Keyword {
     None,
     True,
     False,
-    VarDecl,
+    Var,
+    Func,
 }
-pub static STR_TO_KEYWORD: Lazy<HashMap<&str, Keyword>> = Lazy::new(|| [
-    ("none", Keyword::None),
-    ("true", Keyword::True),
-    ("false", Keyword::False),
-    ("let", Keyword::VarDecl),
-].into());
+pub static STR_TO_KEYWORD: Lazy<HashMap<&str, Keyword>> = Lazy::new(|| {
+    [
+        ("none", Keyword::None),
+        ("true", Keyword::True),
+        ("false", Keyword::False),
+        ("var", Keyword::Var),
+        ("func", Keyword::Func),
+    ]
+    .into()
+});
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Symbol {
     Add,
@@ -186,33 +192,42 @@ pub enum Symbol {
     Semicolon,
     Colon,
 }
-pub static STR_TO_SYMBOL: Lazy<HashMap<&str, Symbol>> = Lazy::new(|| [
-    ("+", Symbol::Add),
-    ("-", Symbol::Sub),
-    ("*", Symbol::Mul),
-    ("/", Symbol::Div),
-    ("%", Symbol::Mod),
-    ("**", Symbol::Pow),
-    ("!", Symbol::Not),
-    ("&", Symbol::And),
-    ("|", Symbol::Or),
-    ("^", Symbol::Xor),
-    ("==", Symbol::Eq),
-    ("!=", Symbol::NotEq),
-    (">", Symbol::Greater),
-    ("<", Symbol::Less),
-    (">=", Symbol::GreaterEq),
-    ("<=", Symbol::LessEq),
-    ("(", Symbol::LParenthesis),
-    (")", Symbol::RParenthesis),
-    ("[", Symbol::LSquareBracket),
-    ("]", Symbol::RSquareBracket),
-    ("{", Symbol::LCurlyBracket),
-    ("}", Symbol::RCurlyBracket),
-    (".", Symbol::Dot),
-    ("=", Symbol::Assign),
-    (",", Symbol::Comma),
-    (";", Symbol::Semicolon),
-    (":", Symbol::Colon),
-].into());
-pub static MAX_SYMBOL_LENGTH: Lazy<usize> = Lazy::new(|| STR_TO_SYMBOL.keys().map(|s| s.len()).max().expect("symbol map has no symbol keys!"));
+pub static STR_TO_SYMBOL: Lazy<HashMap<&str, Symbol>> = Lazy::new(|| {
+    [
+        ("+", Symbol::Add),
+        ("-", Symbol::Sub),
+        ("*", Symbol::Mul),
+        ("/", Symbol::Div),
+        ("%", Symbol::Mod),
+        ("**", Symbol::Pow),
+        ("!", Symbol::Not),
+        ("&", Symbol::And),
+        ("|", Symbol::Or),
+        ("^", Symbol::Xor),
+        ("==", Symbol::Eq),
+        ("!=", Symbol::NotEq),
+        (">", Symbol::Greater),
+        ("<", Symbol::Less),
+        (">=", Symbol::GreaterEq),
+        ("<=", Symbol::LessEq),
+        ("(", Symbol::LParenthesis),
+        (")", Symbol::RParenthesis),
+        ("[", Symbol::LSquareBracket),
+        ("]", Symbol::RSquareBracket),
+        ("{", Symbol::LCurlyBracket),
+        ("}", Symbol::RCurlyBracket),
+        (".", Symbol::Dot),
+        ("=", Symbol::Assign),
+        (",", Symbol::Comma),
+        (";", Symbol::Semicolon),
+        (":", Symbol::Colon),
+    ]
+    .into()
+});
+pub static MAX_SYMBOL_LENGTH: Lazy<usize> = Lazy::new(|| {
+    STR_TO_SYMBOL
+        .keys()
+        .map(|s| s.len())
+        .max()
+        .expect("symbol map has no symbol keys!")
+});
