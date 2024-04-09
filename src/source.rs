@@ -21,7 +21,7 @@ impl<'a> Iterator for SourceIter<'a> {
         if let Some((i, '\r')) = ch {
             let old = self.iter.clone();
 
-            if let Some((i, '\n')) = self.iter.next() {
+            if let Some((i, '\n')) = self.next() {
                 return Some((i, '\n'));
             }
 

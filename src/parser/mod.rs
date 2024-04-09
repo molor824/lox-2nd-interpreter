@@ -6,5 +6,6 @@ mod operator;
 mod parser;
 mod primary;
 mod tokenizer;
+mod statements;
 
 pub use parser::Parser;

@@ -5,16 +5,16 @@ use std::ops::Range;
 use crate::source::SourceIter;
 
 #[derive(Debug, Clone)]
-pub struct SyntaxError {
+pub struct Error {
     pub range: Range<usize>,
     pub error: ErrorType,
 }
-impl SyntaxError {
+impl Error {
     pub fn new(range: Range<usize>, error: ErrorType) -> Self {
         Self { range, error }
     }
 }
-impl fmt::Display for SyntaxError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.error)
     }
@@ -61,7 +61,7 @@ fn highlight_line(
     // finally newline
     writeln!(message)
 }
-impl DisplayError for SyntaxError {
+impl DisplayError for Error {
     fn display(&self, source: &str, message: &mut impl Write) -> fmt::Result {
         let mut iter = SourceIter::from(source);
         let mut column = 0;
@@ -110,6 +110,7 @@ impl DisplayError for SyntaxError {
 #[derive(Debug, Clone)]
 pub enum ErrorType {
     IntOverflow,
+
     ExpectedLParen,
     ExpectedRParen,
     ExpectedLCurly,
@@ -121,49 +122,69 @@ pub enum ErrorType {
     ExpectedIdent,
     ExpectedExpr,
     ExpectedVarName,
-    ExpectedSeperator,
+    ExpectedFuncName,
+    ExpectedSemicolon,
+    ExpectedColon,
+    ExpectedAssign,
+    ExpectedBlock,
+    ExpectedEOF,
+
     IncompleteString,
     IncompleteCharCode,
     IncompleteEscape,
     IncompleteChar,
+
     InvalidEscape,
     InvalidCharCode,
+
     EmptyChar,
     TooManyChars,
+
     UnexpectedSymbol,
-    TrailingComma,
+
+    ExtraDots,
+
+    UnderscoreVariable,
 }
 impl fmt::Display for ErrorType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ErrorType::IntOverflow => write!(f, "Integer overflow"),
+            ErrorType::UnexpectedSymbol => write!(f, "Unexpected symbol"),
+
             ErrorType::ExpectedLParen => write!(f, "Expected a '('"),
             ErrorType::ExpectedRParen => write!(f, "Expected a ')'"),
             ErrorType::ExpectedLCurly => write!(f, "Expected a '{{'"),
             ErrorType::ExpectedRCurly => write!(f, "Expected a '}}'"),
             ErrorType::ExpectedLSquare => write!(f, "Expected a '['"),
             ErrorType::ExpectedRSquare => write!(f, "Expected a ']'"),
+            ErrorType::ExpectedSemicolon => write!(f, "Expected a ';'"),
+            ErrorType::ExpectedColon => write!(f, "Expected a ':'"),
+            ErrorType::ExpectedAssign => write!(f, "Expected a '='"),
             ErrorType::ExpectedNumber => write!(f, "Expected a number"),
             ErrorType::ExpectedInteger => write!(f, "Expected an integer"),
             ErrorType::ExpectedIdent => write!(f, "Expected an identifier"),
-            ErrorType::ExpectedSeperator => write!(f, "Expected a ';'"),
-            ErrorType::UnexpectedSymbol => write!(f, "Unexpected symbol"),
+            ErrorType::ExpectedFuncName => write!(f, "Expected a function name"),
+            ErrorType::ExpectedExpr => write!(f, "Expected expression"),
+            ErrorType::ExpectedVarName => write!(f, "Expected variable name"),
+            ErrorType::ExpectedEOF => write!(f, "Expected end of file"),
+            ErrorType::ExpectedBlock => write!(f, "Expected a block of statements"),
+
             ErrorType::IncompleteString => write!(f, "Incomplete string"),
-            ErrorType::InvalidEscape => write!(f, "Invalid escape sequence"),
+            ErrorType::IncompleteEscape => write!(f, "Incomplete escape sequence"),
+            ErrorType::IncompleteChar => write!(f, "Incomplete character literal"),
             ErrorType::IncompleteCharCode => {
                 write!(f, "Incomplete character code. Must have 2 digits")
             }
-            ErrorType::IncompleteEscape => write!(f, "Incomplete escape sequence"),
+            ErrorType::InvalidEscape => write!(f, "Invalid escape sequence"),
             ErrorType::InvalidCharCode => write!(f, "Invalid character code"),
-            ErrorType::IncompleteChar => write!(f, "Incomplete character literal"),
             ErrorType::EmptyChar => write!(f, "Empty character literal. Must have 1 character"),
             ErrorType::TooManyChars => write!(
                 f,
                 "Too many characters in character literal. Must have 1 character"
             ),
-            ErrorType::ExpectedExpr => write!(f, "Expected expression"),
-            ErrorType::TrailingComma => write!(f, "Trailing comma"),
-            ErrorType::ExpectedVarName => write!(f, "Expected variable name"),
+            ErrorType::ExtraDots => write!(f, "Cannot have multiple '...' symbol in array unpacking"),
+            ErrorType::UnderscoreVariable => write!(f, "Cannot read from '_'. You can only assign to it"),
         }
     }
 }

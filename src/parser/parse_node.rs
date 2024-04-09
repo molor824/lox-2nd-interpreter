@@ -1,5 +1,4 @@
-use once_cell::sync::Lazy;
-use std::{collections::HashMap, fmt, ops::Range};
+use std::{fmt, ops::Range};
 
 use crate::string_name::*;
 
@@ -23,12 +22,6 @@ impl<T> ParseNode<T> {
     pub const fn end(&self) -> usize {
         self.range.end
     }
-    pub fn start_mut(&mut self) -> &mut usize {
-        &mut self.range.start
-    }
-    pub fn end_mut(&mut self) -> &mut usize {
-        &mut self.range.end
-    }
     pub fn convert<T2>(self, conversion: impl FnOnce(T) -> T2) -> ParseNode<T2> {
         ParseNode::new(self.range, conversion(self.data))
     }
@@ -38,101 +31,166 @@ impl<T> ParseNode<T> {
 }
 
 #[derive(Debug, Clone)]
-pub enum AnyNode {
+pub enum Declaration {
+    Var(VarDecl),
+    Func(FuncDecl),
+}
+#[derive(Debug, Clone)]
+pub enum Statement {
+    Declaration(Declaration),
+    Expression(Expression),
+    If(IfStatement),
+    Block(Block),
+}
+#[derive(Debug, Clone)]
+pub enum Expression {
     None,
     Bool(bool),
     Int(u64),
     Real(f64),
     String(String),
     Char(char),
-    Tuple(Vec<ParseNode<AnyNode>>),
-    Ident(StringName),
-    Binary {
-        left: Box<ParseNode<AnyNode>>,
-        right: Box<ParseNode<AnyNode>>,
-        operator: Symbol,
-    },
-    Unary {
-        operand: Box<ParseNode<AnyNode>>,
-        operator: Symbol,
-    },
-    Suffix {
-        node: Box<ParseNode<AnyNode>>,
-        suffix: Box<SuffixType>,
-    },
-    Grouping(Box<ParseNode<AnyNode>>),
-    VarDecl {
-        name: StringName,
-        value: Option<Box<ParseNode<AnyNode>>>,
-    },
+    Array(Vec<ParseNode<Expression>>),
+    Dictionary(Dictionary),
+    Variable(StringName),
+    Binary(Binary),
+    Unary(Unary),
+    Suffix(Suffix),
+    Grouping(Box<ParseNode<Expression>>),
 }
-impl From<Suffix> for AnyNode {
-    fn from(suffix: Suffix) -> Self {
-        Self::Suffix {
-            suffix: Box::new(suffix.suffix),
-            node: Box::new(suffix.node),
-        }
-    }
+#[derive(Debug, Clone)]
+pub struct WhileStatement {
+    pub condition: ParseNode<Expression>,
+    pub loop_block: ParseNode<Block>,
+    pub on_break: Option<ParseNode<Block>>,
+    pub on_continue: Option<ParseNode<Block>>,
 }
-impl From<Binary> for AnyNode {
-    fn from(value: Binary) -> Self {
-        Self::Binary {
-            left: Box::new(value.left),
-            right: Box::new(value.right),
-            operator: value.operator,
-        }
-    }
+#[derive(Debug, Clone)]
+pub struct IfStatement {
+    pub condition: ParseNode<Expression>,
+    pub met_block: ParseNode<Block>,
+    pub else_block: Option<ParseNode<ElseBlock>>,
 }
-impl From<Unary> for AnyNode {
-    fn from(value: Unary) -> Self {
-        Self::Unary {
-            operand: Box::new(value.operand),
-            operator: value.operator,
-        }
-    }
-}
-impl From<VarDecl> for AnyNode {
-    fn from(value: VarDecl) -> Self {
-        Self::VarDecl {
-            name: value.name,
-            value: value.value.map(Box::new),
-        }
-    }
-}
-impl From<Number> for AnyNode {
-    fn from(value: Number) -> Self {
-        match value {
-            Number::Int(i) => AnyNode::Int(i),
-            Number::Real(r) => AnyNode::Real(r),
-        }
-    }
+#[derive(Debug, Clone)]
+pub enum ElseBlock {
+    Block(Block),
+    If(Box<IfStatement>),
 }
 #[derive(Debug, Clone)]
 pub struct VarDecl {
-    pub name: StringName,
-    pub value: Option<ParseNode<AnyNode>>,
+    pub pattern: ParseNode<VarNameType>,
+    pub value: Option<ParseNode<Expression>>,
+}
+#[derive(Debug, Clone)]
+pub enum VarNameType {
+    Ident(Option<StringName>), // single identifier
+    Array { // unpacks an array into variables. eg. `var [a, b, _, d] = ["a", 3, "something", false]` a = "a", b = 3, d = false
+        start_names: Vec<ParseNode<Option<StringName>>>, // `var [a, b, ..., c, d] = [1, 2, 3, 4, 5]` a = 1, b = 2, c = 4, d = 5
+        end_names: Vec<ParseNode<Option<StringName>>>, // `var [..., a, b] = [0, 1, 2, 3, 4]` a = 3, b = 4
+    },
+    Object(Vec<(StringName, ParseNode<StringName>)>), // unpacks an object into variables. eq. `var {a, b, c} = {a: 1, b: 2, c: 3}` a = 1, b = 2, c = 3
+    // you can also assign custom names to the object keys. eq. `var {x: a, y: b} = {x: 0, y: 1}` a = 0, b = 1
+}
+pub type Dictionary = Vec<ParseNode<(ParseNode<DictionaryKey>, ParseNode<Expression>)>>;
+#[derive(Debug, Clone)]
+pub enum DictionaryKey {
+    Ident(StringName),
+    Expr(Expression),
 }
 #[derive(Debug, Clone)]
 pub enum SuffixType {
-    Call(Vec<ParseNode<AnyNode>>),
-    Index(ParseNode<AnyNode>),
+    Call(Vec<ParseNode<Expression>>),
+    Index(Box<ParseNode<Expression>>),
     Property(StringName),
 }
 #[derive(Debug, Clone)]
 pub struct Suffix {
-    pub node: ParseNode<AnyNode>,
+    pub node: Box<ParseNode<Expression>>,
     pub suffix: SuffixType,
 }
 #[derive(Debug, Clone)]
 pub struct Binary {
-    pub left: ParseNode<AnyNode>,
-    pub right: ParseNode<AnyNode>,
-    pub operator: Symbol,
+    pub left: Box<ParseNode<Expression>>,
+    pub right: Box<ParseNode<Expression>>,
+    pub operator: BinaryOperator,
+}
+#[derive(Debug, Clone)]
+pub enum BinaryOperator {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Pow,
+    Not,
+    And,
+    Or,
+    Xor,
+    LogicalAnd,
+    LogicalOr,
+    LeftShift,
+    RightShift,
+    Eq,
+    NotEq,
+    Greater,
+    Less,
+    GreaterEq,
+    LessEq,
+    Assign,
+}
+impl From<Keyword> for BinaryOperator {
+    fn from(keyword: Keyword) -> Self {
+        match keyword {
+            Keyword::And => BinaryOperator::LogicalAnd,
+            Keyword::Or => BinaryOperator::LogicalOr,
+            _ => panic!("invalid keyword: {:?}", keyword),
+        }
+    }
+}
+impl From<Symbol> for BinaryOperator {
+    fn from(symbol: Symbol) -> Self {
+        match symbol {
+            Symbol::Add => BinaryOperator::Add,
+            Symbol::Sub => BinaryOperator::Sub,
+            Symbol::Mul => BinaryOperator::Mul,
+            Symbol::Div => BinaryOperator::Div,
+            Symbol::Mod => BinaryOperator::Mod,
+            Symbol::Pow => BinaryOperator::Pow,
+            Symbol::Not => BinaryOperator::Not,
+            Symbol::And => BinaryOperator::And,
+            Symbol::Or => BinaryOperator::Or,
+            Symbol::Xor => BinaryOperator::Xor,
+            Symbol::LeftShift => BinaryOperator::LeftShift,
+            Symbol::RightShift => BinaryOperator::RightShift,
+            Symbol::Eq => BinaryOperator::Eq,
+            Symbol::NotEq => BinaryOperator::NotEq,
+            Symbol::Greater => BinaryOperator::Greater,
+            Symbol::Less => BinaryOperator::Less,
+            Symbol::GreaterEq => BinaryOperator::GreaterEq,
+            Symbol::LessEq => BinaryOperator::LessEq,
+            Symbol::Assign => BinaryOperator::Assign,
+            _ => panic!("invalid symbol: {:?}", symbol),
+        }
+    }
 }
 #[derive(Debug, Clone)]
 pub struct Unary {
-    pub operand: ParseNode<AnyNode>,
-    pub operator: Symbol,
+    pub operand: Box<ParseNode<Expression>>,
+    pub operator: UnaryOperator,
+}
+#[derive(Debug, Clone)]
+pub enum UnaryOperator {
+    Not,
+    Negate,
+}
+impl From<Symbol> for UnaryOperator {
+    fn from(symbol: Symbol) -> Self {
+        match symbol {
+            Symbol::Not => UnaryOperator::Not,
+            Symbol::Sub => UnaryOperator::Negate,
+            _ => panic!("invalid symbol: {:?}", symbol),
+        }
+    }
 }
 #[derive(Debug, Clone, Copy)]
 pub enum Number {
@@ -144,24 +202,60 @@ pub enum IdentKeyword {
     Ident(StringName),
     Keyword(Keyword),
 }
+#[derive(Debug, Clone)]
+pub struct FuncDecl {
+    pub name: Box<ParseNode<Expression>>,
+    pub value: Box<ParseNode<Expression>>,
+}
+pub type Block = Vec<ParseNode<Statement>>;
+#[derive(Debug, Clone)]
+pub struct Closure {
+    pub args: Vec<ParseNode<StringName>>,
+    pub block: Block,
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Keyword {
+    And,
+    Or,
     None,
     True,
     False,
     Var,
     Func,
+    If,
+    Elif,
+    Else,
+    For,
+    While,
+    Break,
+    Continue,
+    OnBreak,
+    OnContinue,
 }
-pub static STR_TO_KEYWORD: Lazy<HashMap<&str, Keyword>> = Lazy::new(|| {
-    [
-        ("none", Keyword::None),
-        ("true", Keyword::True),
-        ("false", Keyword::False),
-        ("var", Keyword::Var),
-        ("func", Keyword::Func),
-    ]
-    .into()
-});
+impl TryFrom<&str> for Keyword {
+    type Error = ();
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
+            "none" => Keyword::None,
+            "true" => Keyword::True,
+            "false" => Keyword::False,
+            "let" => Keyword::Var,
+            "func" => Keyword::Func,
+            "if" => Keyword::If,
+            "elif" => Keyword::Elif,
+            "else" => Keyword::Else,
+            "while" => Keyword::While,
+            "for" => Keyword::For,
+            "break" => Keyword::Break,
+            "continue" => Keyword::Continue,
+            "onbreak" => Keyword::OnBreak,
+            "oncontinue" => Keyword::OnContinue,
+            "and" => Keyword::And,
+            "or" => Keyword::Or,    
+            _ => return Err(()),
+        })
+    }
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Symbol {
     Add,
@@ -174,6 +268,8 @@ pub enum Symbol {
     And,
     Or,
     Xor,
+    LeftShift,
+    RightShift,
     Eq,
     NotEq,
     Greater,
@@ -187,47 +283,50 @@ pub enum Symbol {
     LCurlyBracket,
     RCurlyBracket,
     Dot,
+    Dots,
     Assign,
     Comma,
     Semicolon,
     Colon,
+    Return,
 }
-pub static STR_TO_SYMBOL: Lazy<HashMap<&str, Symbol>> = Lazy::new(|| {
-    [
-        ("+", Symbol::Add),
-        ("-", Symbol::Sub),
-        ("*", Symbol::Mul),
-        ("/", Symbol::Div),
-        ("%", Symbol::Mod),
-        ("**", Symbol::Pow),
-        ("!", Symbol::Not),
-        ("&", Symbol::And),
-        ("|", Symbol::Or),
-        ("^", Symbol::Xor),
-        ("==", Symbol::Eq),
-        ("!=", Symbol::NotEq),
-        (">", Symbol::Greater),
-        ("<", Symbol::Less),
-        (">=", Symbol::GreaterEq),
-        ("<=", Symbol::LessEq),
-        ("(", Symbol::LParenthesis),
-        (")", Symbol::RParenthesis),
-        ("[", Symbol::LSquareBracket),
-        ("]", Symbol::RSquareBracket),
-        ("{", Symbol::LCurlyBracket),
-        ("}", Symbol::RCurlyBracket),
-        (".", Symbol::Dot),
-        ("=", Symbol::Assign),
-        (",", Symbol::Comma),
-        (";", Symbol::Semicolon),
-        (":", Symbol::Colon),
-    ]
-    .into()
-});
-pub static MAX_SYMBOL_LENGTH: Lazy<usize> = Lazy::new(|| {
-    STR_TO_SYMBOL
-        .keys()
-        .map(|s| s.len())
-        .max()
-        .expect("symbol map has no symbol keys!")
-});
+impl TryFrom<&str> for Symbol {
+    type Error = ();
+    fn try_from(symbol: &str) -> Result<Self, Self::Error> {
+        Ok(match symbol {
+            "+" => Symbol::Add,
+            "-" => Symbol::Sub,
+            "*" => Symbol::Mul,
+            "/" => Symbol::Div,
+            "%" => Symbol::Mod,
+            "**" => Symbol::Pow,
+            "!" => Symbol::Not,
+            "&" => Symbol::And,
+            "|" => Symbol::Or,
+            "^" => Symbol::Xor,
+            "<<" => Symbol::LeftShift,
+            ">>" => Symbol::RightShift,
+            "==" => Symbol::Eq,
+            "!=" => Symbol::NotEq,
+            ">" => Symbol::Greater,
+            "<" => Symbol::Less,
+            ">=" => Symbol::GreaterEq,
+            "<=" => Symbol::LessEq,
+            "(" => Symbol::LParenthesis,
+            ")" => Symbol::RParenthesis,
+            "[" => Symbol::LSquareBracket,
+            "]" => Symbol::RSquareBracket,
+            "{" => Symbol::LCurlyBracket,
+            "}" => Symbol::RCurlyBracket,
+            "." => Symbol::Dot,
+            "..." => Symbol::Dots,
+            "=" => Symbol::Assign,
+            "," => Symbol::Comma,
+            ";" => Symbol::Semicolon,
+            ":" => Symbol::Colon,
+            "<-" => Symbol::Return,    
+            _ => return Err(()),
+        })
+    }
+}
+pub const MAX_SYMBOL_LENGTH: usize = 5;

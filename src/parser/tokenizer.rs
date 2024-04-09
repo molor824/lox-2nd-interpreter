@@ -20,11 +20,11 @@ impl<'a> Parser<'a> {
         while let Some((i, c)) = self.iter.next_if(|(_, c)| c.is_alphanumeric() || *c == '_') {
             range.end = i + c.len_utf8();
         }
-
+        
         let ident = &self.source[range.clone()];
 
-        if let Some(k) = STR_TO_KEYWORD.get(ident) {
-            return Some(ParseNode::new(range, IdentKeyword::Keyword(*k)));
+        if let Ok(k) = Keyword::try_from(ident) {
+            return Some(ParseNode::new(range, IdentKeyword::Keyword(k)));
         }
 
         Some(ParseNode::new(range, IdentKeyword::Ident(ident.into())))
@@ -93,7 +93,7 @@ impl<'a> Parser<'a> {
         let mut symbol = None;
         let mut range = 0..0;
 
-        for len in 0..*MAX_SYMBOL_LENGTH {
+        for len in 0..MAX_SYMBOL_LENGTH {
             if let Some((i, c)) = self.iter.next() {
                 if len == 0 {
                     range.start = i;
@@ -102,8 +102,8 @@ impl<'a> Parser<'a> {
 
                 let symbol_str = &self.source[range.clone()];
 
-                if let Some(s) = STR_TO_SYMBOL.get(symbol_str) {
-                    symbol = Some(*s);
+                if let Ok(s) = Symbol::try_from(symbol_str) {
+                    symbol = Some(s);
                     last = self.iter.clone();
                 }
             } else {
@@ -131,7 +131,7 @@ impl<'a> Parser<'a> {
     pub(super) fn symbol_eq(&mut self, symbol: Symbol) -> ParseOption<Symbol> {
         self.symbol_if(|s| s == symbol)
     }
-    fn skip(&mut self) {
+    pub(super) fn skip(&mut self) {
         loop {
             if self.iter.next_if(|(_, c)| c.is_whitespace()).is_some() {
                 continue;
@@ -205,7 +205,7 @@ impl<'a> Parser<'a> {
                                     if let Some((i, c)) = self.iter.next_if(|(_, c)| *c == '{') {
                                         range.end = i + c.len_utf8();
                                     } else {
-                                        return Err(SyntaxError::new(
+                                        return Err(Error::new(
                                             range,
                                             ErrorType::ExpectedLCurly,
                                         ));
@@ -222,7 +222,7 @@ impl<'a> Parser<'a> {
                                     } else if !is_ascii {
                                         break;
                                     } else {
-                                        return Err(SyntaxError::new(
+                                        return Err(Error::new(
                                             range,
                                             ErrorType::IncompleteCharCode,
                                         ));
@@ -233,7 +233,7 @@ impl<'a> Parser<'a> {
                                     if let Some((i, c)) = self.iter.next_if(|(_, c)| *c == '}') {
                                         range.end = i + c.len_utf8();
                                     } else {
-                                        return Err(SyntaxError::new(
+                                        return Err(Error::new(
                                             range,
                                             ErrorType::ExpectedRCurly,
                                         ));
@@ -243,16 +243,16 @@ impl<'a> Parser<'a> {
                                 if let Some(c) = char::from_u32(char_code) {
                                     c
                                 } else {
-                                    return Err(SyntaxError::new(
+                                    return Err(Error::new(
                                         range,
                                         ErrorType::InvalidCharCode,
                                     ));
                                 }
                             }
-                            _ => return Err(SyntaxError::new(range, ErrorType::InvalidEscape)),
+                            _ => return Err(Error::new(range, ErrorType::InvalidEscape)),
                         });
                     } else {
-                        return Err(SyntaxError::new(range, ErrorType::IncompleteEscape));
+                        return Err(Error::new(range, ErrorType::IncompleteEscape));
                     }
 
                     continue;
@@ -265,7 +265,7 @@ impl<'a> Parser<'a> {
             break;
         }
 
-        Err(SyntaxError::new(range, incomplete_error))
+        Err(Error::new(range, incomplete_error))
     }
     pub(super) fn char(&mut self) -> ParseResultOption<char> {
         self.skip();
@@ -289,10 +289,10 @@ impl<'a> Parser<'a> {
         let mut chars = result.data.chars();
 
         let Some(ch) = chars.next() else {
-            return Err(SyntaxError::new(result.range, ErrorType::EmptyChar));
+            return Err(Error::new(result.range, ErrorType::EmptyChar));
         };
         if chars.next().is_some() {
-            return Err(SyntaxError::new(result.range, ErrorType::TooManyChars));
+            return Err(Error::new(result.range, ErrorType::TooManyChars));
         }
 
         Ok(Some(ParseNode::new(result.range, ch)))
@@ -300,23 +300,26 @@ impl<'a> Parser<'a> {
     pub(super) fn string(&mut self) -> ParseResultOption<String> {
         self.skip();
 
-        let mut is_raw = false;
-        let mut nest_level: u32 = 0;
         let mut range = 0..0;
 
         let old = self.iter.clone();
-        if let Some((i, c)) = self.iter.next_if(|(_, c)| *c == 'r') {
-            is_raw = true;
+        let nest_level = if let Some((i, c)) = self.iter.next_if(|(_, c)| *c == 'r') {
             range = i..i + c.len_utf8();
+
+            let mut nest_level: u32 = 0;
             while let Some((i, c)) = self.iter.next_if(|(_, c)| *c == '(') {
                 range.end = i + c.len_utf8();
                 nest_level += 1;
             }
-        }
+
+            Some(nest_level)
+        } else {
+            None
+        };
 
         if let Some((i, c)) = self.iter.next_if(|(_, c)| *c == '"') {
             range.end = i + c.len_utf8();
-            if !is_raw {
+            if nest_level.is_none() {
                 range.start = i;
             }
         } else {
@@ -334,27 +337,27 @@ impl<'a> Parser<'a> {
                     return None;
                 };
 
-                if !is_raw {
-                    return Some(range);
-                }
+                if let Some(nest_level) = nest_level {
+                    let mut crnt_nest_level = 0;
 
-                while let Some((i, c)) = t.iter.next_if(|(_, c)| *c == ')') {
-                    range.end = i + c.len_utf8();
+                    loop {
+                        if crnt_nest_level == nest_level {
+                            break;
+                        }
 
-                    nest_level -= 1;
-                    if nest_level == 0 {
-                        break;
+                        if let Some((i, c)) = t.iter.next_if(|(_, c)| *c == ')') {
+                            range.end = i + c.len_utf8();
+                            crnt_nest_level += 1;
+                        } else {
+                            t.iter = old;
+                            return None;
+                        }
                     }
-                }
-
-                if nest_level != 0 {
-                    t.iter = old;
-                    return None;
                 }
 
                 Some(range)
             },
-            is_raw,
+            nest_level.is_some(),
             ErrorType::IncompleteString,
         )
         .map(Some)
@@ -371,7 +374,7 @@ impl<'a> Parser<'a> {
                     Number::Int(integer.data),
                 )))
             } else {
-                Err(SyntaxError::new(radix.range, ErrorType::ExpectedInteger))
+                Err(Error::new(radix.range, ErrorType::ExpectedInteger))
             }
         } else {
             self.scientific()
@@ -400,7 +403,7 @@ impl<'a> Parser<'a> {
         }
 
         let Some(exponent) = self.integer(10)? else {
-            return Err(SyntaxError::new(number.range, ErrorType::ExpectedInteger));
+            return Err(Error::new(number.range, ErrorType::ExpectedInteger));
         };
 
         for _ in 0..exponent.data {
@@ -418,7 +421,7 @@ impl<'a> Parser<'a> {
         };
 
         if self.iter.next_if(|(_, c)| *c == '.').is_some() {
-            *integer.end_mut() += 1;
+            integer.range.end += 1;
         } else {
             return Ok(Some(integer.convert(Number::Int)));
         }
@@ -483,7 +486,7 @@ impl<'a> Parser<'a> {
             num = num
                 .checked_mul(radix as u64)
                 .and_then(|n| n.checked_add(c.to_digit(radix).unwrap() as u64))
-                .ok_or(SyntaxError::new(range.clone(), ErrorType::IntOverflow))?;
+                .ok_or(Error::new(range.clone(), ErrorType::IntOverflow))?;
         }
 
         Ok(Some(ParseNode::new(range, num)))

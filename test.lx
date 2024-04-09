@@ -1,6 +1,7 @@
-var text = r"
-This
-is a
-raw
-text!
-;
+if a == 2 {
+	print("test");
+} elif a == 3 {
+	print("test2");
+} else {
+	print("test3");
+}
