@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use super::error::*;
 use super::parse_node::*;
 use super::parser::*;
@@ -89,14 +87,14 @@ impl<'a> Parser<'a> {
 
         let Some(rcurly) = self.symbol_eq(Symbol::RCurlyBracket) else {
             return Err(Error::new(
-                lcurly.start()..items.as_ref().map_or(lcurly.end(), |i| i.end()),
+                lcurly.start()..items.last().map_or(lcurly.end(), |i| i.end()),
                 ErrorType::ExpectedRCurly,
             ));
         };
 
         Ok(Some(ParseNode::new(
             lcurly.start()..rcurly.end(),
-            items.map_or_else(Vec::new, |i| i.data),
+            items.into_iter().map(|i| i.data).collect(),
         )))
     }
     pub(super) fn grouping(&mut self) -> ParseResultOption<ParseNode<Expression>> {
@@ -126,28 +124,20 @@ impl<'a> Parser<'a> {
 
         let Some(rbracket) = self.symbol_eq(Symbol::RSquareBracket) else {
             return Err(Error::new(
-                lbracket.start()..(args.as_ref().map_or(lbracket.end(), |a| a.end())),
+                lbracket.start()..(args.last().map_or(lbracket.end(), |a| a.end())),
                 ErrorType::ExpectedRSquare,
             ));
         };
 
-        Ok(Some(ParseNode::new(
-            lbracket.start()..rbracket.end(),
-            args.map_or_else(Vec::new, |i| i.data),
-        )))
+        Ok(Some(ParseNode::new(lbracket.start()..rbracket.end(), args)))
     }
     pub(super) fn arguments<T>(
         &mut self,
         arg_fn: impl Fn(&mut Self) -> ParseResultOption<T>,
-    ) -> ParseResultOption<Vec<ParseNode<T>>> {
-        let mut args: Option<ParseNode<Vec<_>>> = None;
+    ) -> Result<Vec<ParseNode<T>>> {
+        let mut args = vec![];
         while let Some(arg) = arg_fn(self)? {
-            if let Some(args) = &mut args {
-                args.range.end = arg.end();
-                args.data.push(arg);
-            } else {
-                args = Some(ParseNode::new(arg.range.clone(), vec![arg]));
-            }
+            args.push(arg);
             if self.symbol_eq(Symbol::Comma).is_none() {
                 break;
             }

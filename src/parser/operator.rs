@@ -8,6 +8,17 @@ impl<'a> Parser<'a> {
     pub(super) fn operator(&mut self) -> ParseResultOption<Expression> {
         self.logical_or()
     }
+    fn is_assign_operator(symbol: Symbol) -> bool {
+        matches!(symbol, Symbol::Add | Symbol::Sub | Symbol::Mul | Symbol::Div | Symbol::Mod | Symbol::LeftShift | Symbol::RightShift)
+    }
+    pub(super) fn assign(&mut self) -> ParseResultOption<Expression> {
+        let Some(mut left) = self.logical_or()? else {
+            return Ok(None);
+        };
+        loop {
+            if let Some(assignable_operator) 
+        }
+    }
     pub(super) fn logical_or(&mut self) -> ParseResultOption<Expression> {
         self.binary_kw(|p| p.logical_and(), |k| matches!(k, Keyword::Or))
     }
@@ -75,7 +86,7 @@ impl<'a> Parser<'a> {
                 s.start()..operand.end(),
                 Expression::Unary(Unary {
                     operand: operand.into(),
-                    operator: s.data.into(),
+                    operator: s.data,
                 }),
             );
         }
@@ -95,14 +106,7 @@ impl<'a> Parser<'a> {
             None => return Ok(None),
         };
         let mut parser = self.clone();
-        loop {
-            let Some(kw) = parser.keyword() else {
-                break;
-            };
-            if !kw_check(kw.data) {
-                break;
-            }
-
+        while let Some(kw) = parser.keyword_if(kw_check) {
             let Some(right) = lower_fn(self)? else {
                 return Err(Error::new(left.start()..kw.end(), ErrorType::ExpectedExpr));
             };
@@ -111,7 +115,7 @@ impl<'a> Parser<'a> {
                 Expression::Binary(Binary {
                     left: left.into(),
                     right: right.into(),
-                    operator: kw.data.into(),
+                    operator: SymbolKeyword::Keyword(kw.data),
                 }),
             );
         }
@@ -126,11 +130,7 @@ impl<'a> Parser<'a> {
             Some(l) => l,
             None => return Ok(None),
         };
-        loop {
-            let Some(op) = self.symbol_if(&op_check) else {
-                break;
-            };
-
+        while let Some(op) = self.symbol_if(op_check) {
             let Some(right) = lower_fn(self)? else {
                 return Err(Error::new(left.start()..op.end(), ErrorType::ExpectedExpr));
             };
@@ -139,7 +139,7 @@ impl<'a> Parser<'a> {
                 Expression::Binary(Binary {
                     left: left.into(),
                     right: right.into(),
-                    operator: op.data.into(),
+                    operator: SymbolKeyword::Symbol(op.data),
                 }),
             );
         }
@@ -184,12 +184,12 @@ impl<'a> Parser<'a> {
                     let args = self.arguments(|p| p.expression())?;
                     let Some(closing) = self.symbol_eq(Symbol::RParenthesis) else {
                         return Err(Error::new(
-                            symbol.start()..args.as_ref().map_or(symbol.end(), |i| i.end()),
+                            symbol.start()..args.last().map_or(symbol.end(), |i| i.end()),
                             ErrorType::ExpectedRParen,
                         ));
                     };
                     range = symbol.start()..closing.end();
-                    suffix = SuffixType::Call(args.map_or_else(Vec::new, |i| i.data));
+                    suffix = SuffixType::Call(args);
                 }
                 _ => unreachable!(),
             };

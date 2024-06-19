@@ -1,7 +1,9 @@
-if a == 2 {
-	print("test");
-} elif a == 3 {
-	print("test2");
-} else {
-	print("test3");
+func fib(n = 10) {
+	let [a, b] = [0, 1];
+	while n > 0 {
+		let c = a + b;
+	}
+	oncontinue {
+		n - 1;
+	}
 }

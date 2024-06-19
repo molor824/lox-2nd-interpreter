@@ -4,6 +4,8 @@ use std::ops::Range;
 
 use crate::source::SourceIter;
 
+pub type Result<T> = std::result::Result<T, Error>;
+
 #[derive(Debug, Clone)]
 pub struct Error {
     pub range: Range<usize>,
@@ -127,6 +129,7 @@ pub enum ErrorType {
     ExpectedColon,
     ExpectedAssign,
     ExpectedBlock,
+    ExpectedFuncBlock,
     ExpectedEOF,
 
     IncompleteString,
@@ -169,6 +172,9 @@ impl fmt::Display for ErrorType {
             ErrorType::ExpectedVarName => write!(f, "Expected variable name"),
             ErrorType::ExpectedEOF => write!(f, "Expected end of file"),
             ErrorType::ExpectedBlock => write!(f, "Expected a block of statements"),
+            ErrorType::ExpectedFuncBlock => {
+                write!(f, "Expected a block or expression ('-> [expr]')")
+            }
 
             ErrorType::IncompleteString => write!(f, "Incomplete string"),
             ErrorType::IncompleteEscape => write!(f, "Incomplete escape sequence"),
@@ -183,8 +189,12 @@ impl fmt::Display for ErrorType {
                 f,
                 "Too many characters in character literal. Must have 1 character"
             ),
-            ErrorType::ExtraDots => write!(f, "Cannot have multiple '...' symbol in array unpacking"),
-            ErrorType::UnderscoreVariable => write!(f, "Cannot read from '_'. You can only assign to it"),
+            ErrorType::ExtraDots => {
+                write!(f, "Cannot have multiple '...' symbol in array unpacking")
+            }
+            ErrorType::UnderscoreVariable => {
+                write!(f, "Cannot read from '_'. You can only assign to it")
+            }
         }
     }
 }

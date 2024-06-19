@@ -20,7 +20,7 @@ impl<'a> Parser<'a> {
         while let Some((i, c)) = self.iter.next_if(|(_, c)| c.is_alphanumeric() || *c == '_') {
             range.end = i + c.len_utf8();
         }
-        
+
         let ident = &self.source[range.clone()];
 
         if let Ok(k) = Keyword::try_from(ident) {
@@ -205,10 +205,7 @@ impl<'a> Parser<'a> {
                                     if let Some((i, c)) = self.iter.next_if(|(_, c)| *c == '{') {
                                         range.end = i + c.len_utf8();
                                     } else {
-                                        return Err(Error::new(
-                                            range,
-                                            ErrorType::ExpectedLCurly,
-                                        ));
+                                        return Err(Error::new(range, ErrorType::ExpectedLCurly));
                                     }
                                 }
 
@@ -233,20 +230,14 @@ impl<'a> Parser<'a> {
                                     if let Some((i, c)) = self.iter.next_if(|(_, c)| *c == '}') {
                                         range.end = i + c.len_utf8();
                                     } else {
-                                        return Err(Error::new(
-                                            range,
-                                            ErrorType::ExpectedRCurly,
-                                        ));
+                                        return Err(Error::new(range, ErrorType::ExpectedRCurly));
                                     }
                                 }
 
                                 if let Some(c) = char::from_u32(char_code) {
                                     c
                                 } else {
-                                    return Err(Error::new(
-                                        range,
-                                        ErrorType::InvalidCharCode,
-                                    ));
+                                    return Err(Error::new(range, ErrorType::InvalidCharCode));
                                 }
                             }
                             _ => return Err(Error::new(range, ErrorType::InvalidEscape)),

@@ -4,8 +4,8 @@ use crate::source::SourceIter;
 
 use super::{error::*, parse_node::*};
 
-pub type ParseResultOption<T> = Result<Option<ParseNode<T>>, Error>;
-pub type ParseResult<T> = Result<ParseNode<T>, Error>;
+pub type ParseResultOption<T> = Result<Option<ParseNode<T>>>;
+pub type ParseResult<T> = Result<ParseNode<T>>;
 pub type ParseOption<T> = Option<ParseNode<T>>;
 
 #[derive(Debug, Clone)]
@@ -22,9 +22,9 @@ impl<'a> Parser<'a> {
             source,
         }
     }
-    pub fn parse(&mut self) -> Result<Vec<ParseNode<Statement>>, Error> {
+    pub fn parse(&mut self) -> Result<Vec<ParseNode<Statement>>> {
         if let Some(stmts) = self.statements()? {
-            return Ok(stmts.data);
+            return Ok(stmts.data.statements);
         }
         self.skip();
         if let Some((i, c)) = self.iter.next() {

@@ -5,7 +5,7 @@ mod declaration;
 mod operator;
 mod parser;
 mod primary;
-mod tokenizer;
 mod statements;
+mod tokenizer;
 
 pub use parser::Parser;
